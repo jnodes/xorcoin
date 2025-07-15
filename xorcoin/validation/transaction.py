@@ -7,6 +7,7 @@ from typing import List
 from ..core.models import Transaction
 from ..core.utxo import UTXOSet
 from ..crypto.keys import KeyManager
+from cryptography.hazmat.backends import default_backend
 from ..crypto.signatures import SignatureManager
 from cryptography.hazmat.primitives import serialization
 
@@ -96,9 +97,9 @@ class TransactionValidator:
             
         try:
             # Load public key from bytes
-            public_key = serialization.load_der_public_key(
+            public_key = serialization.load_pem_public_key(
                 tx_input.pubkey,
-                backend=None
+                backend=default_backend()
             )
             
             # Check that public key matches expected address
