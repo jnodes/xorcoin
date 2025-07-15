@@ -1,0 +1,37 @@
+# Xorcoin Security Configuration
+network:
+  max_connections: 125
+  max_connections_per_ip: 3
+  connection_timeout: 10
+  handshake_timeout: 5
+  
+rate_limiting:
+  max_requests_per_minute: 60
+  max_inv_items: 50000
+  max_message_size: 33554432  # 32MB
+  
+mempool:
+  max_size: 300000000  # 300MB
+  min_relay_fee: 1000  # satoshis
+  expiry_hours: 336  # 2 weeks
+  
+consensus:
+  max_block_size: 1000000  # 1MB
+  max_block_sigops: 20000
+  coinbase_maturity: 100
+  
+security:
+  ban_threshold: 100
+  ban_duration: 86400  # 24 hours
+  
+  # Ban scores for violations
+  ban_scores:
+    invalid_block: 100
+    invalid_transaction: 10
+    too_many_messages: 20
+    oversized_message: 50
+    
+validation:
+  script_size_limit: 10000
+  max_script_ops: 201
+  max_pubkeys_per_multisig: 20

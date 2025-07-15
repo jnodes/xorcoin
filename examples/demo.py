@@ -48,7 +48,7 @@ def main():
     
     # Mine first block to get some coins
     print("\n--- Mining Block 1 ---")
-    block1 = xorcoin.mine_block(miner_address, reward=50)
+    block1 = xorcoin.mine_block(miner_address, reward=100)
     if block1:
         print(f"Block mined! Height: {block1.height}, Hash: {block1.get_header_hash()[:16]}...")
         print(f"Miner balance: {xorcoin.get_balance(miner_address)} XOR")
@@ -64,6 +64,8 @@ def main():
     
     if tx1:
         print(f"Transaction created: {tx1.get_hash()[:16]}...")
+        print(f"Transaction fee: {xorcoin.calculate_min_fee(tx1)} satoshis")
+        print(f"Transaction fee: {xorcoin.calculate_min_fee(tx1)} satoshis")
         if xorcoin.add_transaction(tx1):
             print("Transaction added to mempool")
     

@@ -4,11 +4,11 @@ Transaction validation for Xorcoin
 
 import time
 from typing import List
-from ..core.models import Transaction
-from ..core.utxo import UTXOSet
-from ..crypto.keys import KeyManager
+from xorcoin.core.models import Transaction
+from xorcoin.core.utxo import UTXOSet
+from xorcoin.crypto.keys import KeyManager
 from cryptography.hazmat.backends import default_backend
-from ..crypto.signatures import SignatureManager
+from xorcoin.crypto.signatures import SignatureManager
 from cryptography.hazmat.primitives import serialization
 
 

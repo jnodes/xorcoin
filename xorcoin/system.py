@@ -3,30 +3,61 @@ Main Xorcoin system implementation
 """
 
 from typing import List, Dict, Tuple, Optional
-from .core import (
-    UTXO, TxInput, TxOutput, Transaction, Block,
-    UTXOSet, BlockMiner, Blockchain
-)
-from .crypto import KeyManager, SignatureManager
-from .validation import TransactionValidator
-from .network import XorcoinServer
 from cryptography.hazmat.primitives.asymmetric import ec
+import yaml
+
+# Core imports
+from xorcoin.core import (
+    UTXO, TxInput, TxOutput, Transaction, Block,
+    BlockMiner, Blockchain
+)
+from xorcoin.core.utxo_threadsafe import ThreadSafeUTXOSet
+from xorcoin.core.mempool import Mempool
+
+# Security imports
+from xorcoin.security import DoubleSpendProtector, RateLimiter, BanManager
+
+# Consensus imports
+from xorcoin.consensus import ConsensusRules, ForkChoice
+
+# Crypto imports
+from xorcoin.crypto import KeyManager, SignatureManager
+
+# Validation imports
+from xorcoin.validation import TransactionValidator
+
+# Network imports
+from xorcoin.network import XorcoinServer
 
 
 class XorcoinSystem:
     """Main Xorcoin system coordinating all components"""
     
     def __init__(self):
-        self.utxo_set = UTXOSet()
-        self.mempool: List[Transaction] = []
+        # Core components
+        self.utxo_set = ThreadSafeUTXOSet()
+        self.mempool = Mempool()
         self.confirmed_txs: Dict[str, Transaction] = {}
         self.blockchain = Blockchain()
         self.key_manager = KeyManager()
         self.server: Optional[XorcoinServer] = None
         
+        # Security components
+        self.double_spend_protector = DoubleSpendProtector()
+        self.rate_limiter = RateLimiter()
+        self.ban_manager = BanManager()
+        
+        # Load security config
+        try:
+            with open('config/security.yaml', 'r') as f:
+                self.security_config = yaml.safe_load(f)
+        except FileNotFoundError:
+            print("Warning: security.yaml not found, using defaults")
+            self.security_config = {}
+        
         # Initialize with genesis block
         self._create_genesis_block()
-        
+
     def _create_genesis_block(self) -> None:
         """Create the genesis block with initial coin distribution"""
         # Create genesis transaction (coinbase)
@@ -64,6 +95,18 @@ class XorcoinSystem:
         """Get balance for an address"""
         return self.utxo_set.get_balance(address)
         
+    def calculate_min_fee(self, tx: Transaction) -> int:
+        """Calculate minimum fee for a transaction based on size"""
+        tx_size = len(str(tx).encode())
+        min_fee_rate = self.mempool.min_fee_rate
+        return tx_size * min_fee_rate
+
+    def calculate_min_fee(self, tx: Transaction) -> int:
+        """Calculate minimum fee for a transaction based on size"""
+        tx_size = len(str(tx).encode())
+        min_fee_rate = self.mempool.min_fee_rate
+        return tx_size * min_fee_rate
+
     def create_transaction(
         self,
         from_address: str,
@@ -118,10 +161,16 @@ class XorcoinSystem:
         # Add outputs
         tx.outputs.append(TxOutput(amount=amount, script_pubkey=to_address))
         
-        # Add change output if necessary
-        change = total_input - amount
+        # Calculate minimum fee
+        min_fee = len(str(tx).encode()) * self.mempool.min_fee_rate
+        
+        # Add change output if necessary (minus fee)
+        change = total_input - amount - min_fee
         if change > 0:
             tx.outputs.append(TxOutput(amount=change, script_pubkey=from_address))
+        elif change < 0:
+            print(f"Insufficient balance for transaction fee: need {min_fee} additional")
+            return None
             
         # Sign inputs
         public_key = private_key.public_key()
@@ -136,15 +185,32 @@ class XorcoinSystem:
         return tx
         
     def add_transaction(self, tx: Transaction) -> bool:
-        """Validate and add transaction to mempool"""
-        validator = TransactionValidator(self.utxo_set, self.mempool)
+        """Validate and add transaction to mempool with security checks"""
+        # First check double-spend protection
+        if not self.double_spend_protector.check_and_lock_utxos(tx):
+            print("Transaction rejected: double-spend attempt")
+            return False
+            
+        # Validate transaction
+        validator = TransactionValidator(self.utxo_set, list(self.mempool.transactions.values()))
         
         if validator.validate_transaction(tx):
-            self.mempool.append(tx)
-            print(f"Transaction {tx.get_hash()} added to mempool")
-            return True
+            # Calculate fee
+            fee = validator.calculate_transaction_fee(tx)
+            
+            # Try to add to enhanced mempool
+            if self.mempool.add_transaction(tx, fee):
+                print(f"Transaction {tx.get_hash()} added to mempool")
+                return True
+            else:
+                print("Transaction rejected: mempool full or fee too low")
+                # Rollback UTXO locks
+                self.double_spend_protector.rollback_transaction(tx)
+                return False
         else:
             print("Transaction validation failed")
+            # Rollback UTXO locks
+            self.double_spend_protector.rollback_transaction(tx)
             return False
             
     def mine_block(self, miner_address: str, reward: int = 50) -> Optional[Block]:
@@ -170,7 +236,7 @@ class XorcoinSystem:
         
         # Create new block with pending transactions
         block = Block(
-            transactions=[coinbase_tx] + self.mempool[:10]  # Limit block size
+            transactions=[coinbase_tx] + list(self.mempool.transactions.values())[:10]  # Limit block size
         )
         
         # Add block to blockchain
@@ -180,8 +246,8 @@ class XorcoinSystem:
             
             # Clear processed transactions from mempool
             for tx in block.transactions[1:]:  # Skip coinbase
-                if tx in self.mempool:
-                    self.mempool.remove(tx)
+                if tx.get_hash() in self.mempool.transactions:
+                    del self.mempool.transactions[tx.get_hash()]
                     
             return block
             
@@ -248,6 +314,6 @@ class XorcoinSystem:
             "height": len(self.blockchain.chain),
             "latest_hash": latest_block.get_header_hash(),
             "difficulty": latest_block.difficulty,
-            "mempool_size": len(self.mempool),
+            "mempool_size": len(self.mempool.transactions),
             "utxo_count": len(self.utxo_set)
         }

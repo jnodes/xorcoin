@@ -57,8 +57,7 @@ class Transaction:
         data = {
             'version': self.version,
             'chain_id': self.chain_id,
-            'timestamp': self.timestamp,
-            'inputs': [
+                        'inputs': [
                 {
                     'prev_tx_hash': inp.prev_tx_hash,
                     'prev_output_index': inp.prev_output_index
@@ -136,8 +135,7 @@ class Block:
         header = {
             'version': self.version,
             'height': self.height,
-            'timestamp': self.timestamp,
-            'prev_block_hash': self.prev_block_hash,
+                        'prev_block_hash': self.prev_block_hash,
             'merkle_root': self.merkle_root,
             'difficulty': self.difficulty,
             'nonce': self.nonce

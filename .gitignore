@@ -74,3 +74,28 @@ venv.bak/
 blockchain.db
 wallet.dat
 debug.log
+
+# Temporary fix scripts
+fix_*.py
+*_fixed.py
+*_temp.py
+test_*.py
+demo_*.py
+refactor_*.py
+integrate_*.py
+clean_*.py
+create_*.py
+add_*.py
+run_*.py
+generate_*.py
+
+# Backup directories
+xorcoin_backup_*/
+
+# Patch files
+*.orig
+*.rej
+
+# Demo scripts (except the main one)
+demo_simple*.py
+demo_working.py
