@@ -1,0 +1,5 @@
+Xorcoin Address: a3eb39c7f55cb6261e57859f788b7b5b4e49b35d
+Created: 2025-07-15 17:21:39.545310
+
+IMPORTANT: This is your Xorcoin address, not a Bitcoin address!
+Keep your wallet.json file and password safe!
