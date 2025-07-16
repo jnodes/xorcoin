@@ -6,6 +6,7 @@ from typing import List, Dict, Tuple, Optional
 from cryptography.hazmat.primitives.asymmetric import ec
 import yaml
 
+from xorcoin.economics import XorcoinEconomics
 # Core imports
 from xorcoin.core import (
     UTXO, TxInput, TxOutput, Transaction, Block,
@@ -67,7 +68,7 @@ class XorcoinSystem:
             inputs=[],  # No inputs for coinbase
             outputs=[
                 TxOutput(
-                    amount=1000000,  # 1M Xorcoin initial supply
+                    amount=XorcoinEconomics.get_block_reward(0),  # Use economics-defined amount
                     script_pubkey="genesis"  # Special genesis address
                 )
             ]
@@ -219,18 +220,22 @@ class XorcoinSystem:
         
         Args:
             miner_address: Address to receive mining reward
-            reward: Mining reward amount
+            reward: Mining reward amount (will be overridden by economics)
             
         Returns:
             Mined block if successful
         """
+        # Get proper reward from economics
+        current_height = len(self.blockchain.chain)
+        actual_reward = XorcoinEconomics.get_block_reward(current_height)
+        
         # Create coinbase transaction
         coinbase_tx = Transaction(
             version=1,
             chain_id=1,
             inputs=[],  # No inputs for coinbase
             outputs=[
-                TxOutput(amount=reward, script_pubkey=miner_address)
+                TxOutput(amount=actual_reward, script_pubkey=miner_address)
             ]
         )
         
@@ -308,12 +313,23 @@ class XorcoinSystem:
             return {"status": "error", "message": "Unknown message type"}
             
     def get_blockchain_info(self) -> dict:
-        """Get information about the blockchain"""
+        """Get information about the blockchain with economics data"""
         latest_block = self.blockchain.get_latest_block()
+        current_height = len(self.blockchain.chain)
+        
+        # Get economics info
+        current_reward = XorcoinEconomics.get_block_reward(current_height)
+        total_supply = XorcoinEconomics.get_total_supply_at_height(current_height)
+        blocks_until_halving = XorcoinEconomics.HALVING_INTERVAL - (current_height % XorcoinEconomics.HALVING_INTERVAL)
+        
         return {
-            "height": len(self.blockchain.chain),
+            "height": current_height,
             "latest_hash": latest_block.get_header_hash(),
             "difficulty": latest_block.difficulty,
             "mempool_size": len(self.mempool.transactions),
-            "utxo_count": len(self.utxo_set)
+            "utxo_count": len(self.utxo_set),
+            "current_reward": current_reward,
+            "total_supply": total_supply,
+            "blocks_until_halving": blocks_until_halving,
+            "max_supply": XorcoinEconomics.MAX_SUPPLY
         }

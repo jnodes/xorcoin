@@ -1,0 +1,43 @@
+    def mine_block(self, miner_address: str, reward: int = 50) -> Optional[Block]:
+        """
+        Mine a new block
+        
+        Args:
+            miner_address: Address to receive mining reward
+            reward: Mining reward amount (will be overridden by economics)
+            
+        Returns:
+            Mined block if successful
+        """
+        # Get proper reward from economics
+        current_height = len(self.blockchain.chain)
+        actual_reward = XorcoinEconomics.get_block_reward(current_height)
+        
+        # Create coinbase transaction
+        coinbase_tx = Transaction(
+            version=1,
+            chain_id=1,
+            inputs=[],  # No inputs for coinbase
+            outputs=[
+                TxOutput(amount=actual_reward, script_pubkey=miner_address)
+            ]
+        )
+        
+        # Create new block with pending transactions
+        block = Block(
+            transactions=[coinbase_tx] + list(self.mempool.transactions.values())[:10]  # Limit block size
+        )
+        
+        # Add block to blockchain
+        if self.blockchain.add_block(block):
+            # Process block
+            self._process_block(block)
+            
+            # Clear processed transactions from mempool
+            for tx in block.transactions[1:]:  # Skip coinbase
+                if tx.get_hash() in self.mempool.transactions:
+                    del self.mempool.transactions[tx.get_hash()]
+                    
+            return block
+            
+        return None

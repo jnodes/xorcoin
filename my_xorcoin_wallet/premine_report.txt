@@ -1,24 +1,24 @@
 
 XORCOIN PRE-MINING REPORT
 ========================
-Generated: 2025-07-15 17:22:08.479178
+Generated: 2025-07-16 09:14:19.450611
 
 Wallet Information:
 ------------------
-Address: a3eb39c7f55cb6261e57859f788b7b5b4e49b35d
+Address: 90996eda71a0a5b9e9fadf024f0c8500d86765e2
 Balance: 1,000,050 XOR
 
 Blockchain Statistics:
 ---------------------
 Height: 101
-Latest Hash: 00003302e9ba929e45e9e9537bd90e17cdd38efe57ed24f97c328fecbc1679b7
+Latest Hash: 0000b6664413d4ca33c5b525d8dbbfbb39b70b1166dd434d6e281fb6f9756e87
 Difficulty: 4
 Total Blocks: 101
 UTXO Count: 2
 
 Genesis Block:
 -------------
-Hash: 00008ed42c464ec4c68faa4fbcfc085b567193a9986e1156f009c1d365c0687f
+Hash: 00004ce53a646b5050231739d265869d4a4befa3bacb6fadefd9508ccceb7998
 Initial Supply: 1,000,000 XOR
 
 Mining Summary:
