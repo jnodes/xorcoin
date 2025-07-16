@@ -333,3 +333,12 @@ class XorcoinSystem:
             "blocks_until_halving": blocks_until_halving,
             "max_supply": XorcoinEconomics.MAX_SUPPLY
         }
+
+    def start_p2p_node(self, host: str = '0.0.0.0', port: int = 8333):
+        """Start P2P network node"""
+        from xorcoin.network.p2p import P2PNode
+        
+        self.p2p_node = P2PNode(self, host, port)
+        self.p2p_node.start()
+        
+        return self.p2p_node
