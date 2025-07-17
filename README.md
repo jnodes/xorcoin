@@ -1,5 +1,5 @@
 # Xorcoin
-A minimalistic private and secure UTXO-based blockchain implementation
+A minimalistic, private, and secure UTXO-based blockchain implementation.
 
 ## Run Demo
 ```bash
