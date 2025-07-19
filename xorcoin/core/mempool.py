@@ -11,7 +11,7 @@ class Mempool:
         self.tx_by_fee: List[tuple] = []  # Min heap of (-fee_per_byte, tx_hash)
         self.current_size = 0
         self.max_size = max_size
-        self.min_fee_rate = 0.01  # Satoshis per byte (lowered for demo)
+        self.min_fee_rate = 0.001  # Satoshis per byte (lowered for demo)
         
     def add_transaction(self, tx: Transaction, fee: int) -> bool:
         """Add transaction with fee-based prioritization"""

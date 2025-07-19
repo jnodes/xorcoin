@@ -163,7 +163,7 @@ class XorcoinSystem:
         tx.outputs.append(TxOutput(amount=amount, script_pubkey=to_address))
         
         # Calculate minimum fee
-        min_fee = len(str(tx).encode()) * self.mempool.min_fee_rate
+        min_fee = len(str(tx).encode()) * 0.01
         
         # Add change output if necessary (minus fee)
         change = total_input - amount - min_fee

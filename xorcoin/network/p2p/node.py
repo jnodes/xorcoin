@@ -18,7 +18,7 @@ from xorcoin.security.rate_limiter import RateLimiter, MessageSizeLimiter
 from xorcoin.core.models import Block, Transaction
 
 
-class ImprovedP2PNode:
+class P2PNode:
     """Enhanced P2P network node with security features"""
     
     def __init__(self, xorcoin_system, host: str = '0.0.0.0', port: int = 8333):
@@ -38,7 +38,7 @@ class ImprovedP2PNode:
             'max_outbound_connections': 8
         }
         self.peer_score_manager = PeerScoreManager()
-        self.message_rate_limiter = RateLimiter(max_messages_per_minute=120)
+        self.message_rate_limiter = RateLimiter(max_requests_per_minute=120)
         
         # Node identification
         self.node_id = random.randint(1, 2**64)
@@ -401,3 +401,179 @@ class ImprovedP2PNode:
     def _deserialize_transaction(self, data: dict) -> Optional[Transaction]:
         """Deserialize transaction from network data"""
         return NetworkSerializer.deserialize_transaction(data)
+    
+    def _handle_version(self, peer: Peer, message: Message):
+        """Handle version message"""
+        payload = message.payload
+        
+        # Store peer info
+        peer.version = payload.get('version', 1)
+        peer.services = payload.get('services', 1)
+        peer.user_agent = payload.get('user_agent', 'unknown')
+        peer.start_height = payload.get('start_height', 0)
+        
+        # Send verack
+        peer.send_message(Message(MessageType.VERACK, {}))
+        
+        # Send version if not sent yet
+        if peer.state == PeerState.CONNECTED:
+            self._send_version(peer)
+            
+    def _handle_verack(self, peer: Peer, message: Message):
+        """Handle verack message"""
+        peer.state = PeerState.READY
+        print(f"Handshake complete with {peer}")
+        
+        # Request peer addresses
+        peer.send_message(Message(MessageType.GETADDR, {}))
+        
+    def _handle_ping(self, peer: Peer, message: Message):
+        """Handle ping message"""
+        # Respond with pong
+        peer.send_message(Message(MessageType.PONG, message.payload))
+        
+    def _handle_pong(self, peer: Peer, message: Message):
+        """Handle pong message"""
+        # Update last received time
+        peer.last_recv = time.time()
+        
+    def _handle_getaddr(self, peer: Peer, message: Message):
+        """Handle getaddr message"""
+        # Send known peer addresses
+        known_addrs = []
+        for (host, port) in list(self.peer_manager.known_peers)[:100]:
+            known_addrs.append({
+                'timestamp': int(time.time()),
+                'services': 1,
+                'host': host,
+                'port': port
+            })
+            
+        if known_addrs:
+            peer.send_message(Message(MessageType.ADDR, {'addrs': known_addrs}))
+            
+    def _handle_addr(self, peer: Peer, message: Message):
+        """Handle addr message"""
+        addrs = message.payload.get('addrs', [])
+        
+        for addr in addrs[:1000]:  # Limit to prevent spam
+            host = addr.get('host')
+            port = addr.get('port', 8333)
+            
+            if host and port:
+                self.peer_manager.known_peers.add((host, port))
+                
+    def _handle_inv(self, peer: Peer, message: Message):
+        """Handle inventory message"""
+        peer_id = f"{peer.host}:{peer.port}"
+        items = message.payload.get('items', [])
+        
+        # Request unknown items
+        to_request = []
+        for item_data in items:
+            inv_item = InvItem.from_dict(item_data)
+            
+            if inv_item.type == 'block':
+                # Check if we have this block
+                if not self._have_block(inv_item.hash):
+                    to_request.append(inv_item)
+                    self.requested_blocks.add(inv_item.hash)
+                    
+            elif inv_item.type == 'tx':
+                # Check if we have this transaction
+                if not self._have_transaction(inv_item.hash):
+                    to_request.append(inv_item)
+                    self.requested_txs.add(inv_item.hash)
+                    
+        if to_request:
+            peer.send_message(Message(MessageType.GETDATA, {
+                'items': [item.to_dict() for item in to_request]
+            }))
+            
+    def _handle_getdata(self, peer: Peer, message: Message):
+        """Handle getdata message"""
+        items = message.payload.get('items', [])
+        
+        for item_data in items:
+            inv_item = InvItem.from_dict(item_data)
+            
+            if inv_item.type == 'block':
+                block = self._get_block(inv_item.hash)
+                if block:
+                    peer.send_message(Message(MessageType.BLOCK, {
+                        'block': self._serialize_block(block)
+                    }))
+                    
+            elif inv_item.type == 'tx':
+                tx = self._get_transaction(inv_item.hash)
+                if tx:
+                    peer.send_message(Message(MessageType.TX, {
+                        'tx': self._serialize_transaction(tx)
+                    }))
+                    
+    def _send_version(self, peer: Peer):
+        """Send version message to peer"""
+        version_msg = VersionMessage(
+            version=1,
+            services=1,
+            timestamp=int(time.time()),
+            addr_recv={'host': peer.host, 'port': peer.port},
+            addr_from={'host': self.host, 'port': self.port},
+            nonce=self.node_id,
+            user_agent="Xorcoin:0.1.0",
+            start_height=len(self.system.blockchain.chain),
+            relay=True
+        )
+        
+        peer.send_message(Message(MessageType.VERSION, version_msg.to_payload()))
+        peer.state = PeerState.HANDSHAKING
+        
+    def connect_peer(self, host: str, port: int) -> Optional[Peer]:
+        """Connect to a specific peer"""
+        peer = self.peer_manager.add_peer(host, port)
+        if peer:
+            peer.on_message = self._handle_peer_message
+            peer.on_disconnect = self._handle_peer_disconnect
+            
+            # Send version handshake
+            self._send_version(peer)
+            
+        return peer
+        
+    def _have_block(self, block_hash: str) -> bool:
+        """Check if we have a block"""
+        for block in self.system.blockchain.chain:
+            if block.get_header_hash() == block_hash:
+                return True
+        return False
+        
+    def _have_transaction(self, tx_hash: str) -> bool:
+        """Check if we have a transaction"""
+        return tx_hash in self.system.mempool.transactions or \
+               tx_hash in self.system.confirmed_txs
+               
+    def _get_block(self, block_hash: str) -> Optional[Block]:
+        """Get block by hash"""
+        for block in self.system.blockchain.chain:
+            if block.get_header_hash() == block_hash:
+                return block
+        return None
+        
+    def _get_transaction(self, tx_hash: str) -> Optional[Transaction]:
+        """Get transaction by hash"""
+        if tx_hash in self.system.mempool.transactions:
+            return self.system.mempool.transactions[tx_hash]
+        if tx_hash in self.system.confirmed_txs:
+            return self.system.confirmed_txs[tx_hash]
+        return None
+        
+    def stop(self):
+        """Stop P2P node"""
+        self.running = False
+        
+        if hasattr(self, 'server_socket') and self.server_socket:
+            self.server_socket.close()
+            
+        # Disconnect all peers
+        for peer in list(self.peer_manager.peers.values()):
+            peer.disconnect()
